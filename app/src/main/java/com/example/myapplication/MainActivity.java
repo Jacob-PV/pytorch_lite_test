@@ -42,9 +42,10 @@ public class MainActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
-        // create df and locations list
+        // create df, locations list, hours list
         List<List<Object>> df = new ArrayList<>(); // time, pillar, speed, angle
         List<String> locations = new ArrayList();
+        List<Integer> hours = new ArrayList();
 
         try {
             File csvfile = new File(assetFilePath(getApplicationContext(), "short_filtered_21_50.csv"));
@@ -58,6 +59,11 @@ public class MainActivity extends AppCompatActivity {
                 if (isHeader) {
                     isHeader = false;
                     continue;
+                }
+
+                Integer hour = getHour(Integer.parseInt(nextLine[0]));
+                if (!hours.contains(hour)) {
+                    hours.add((hour));
                 }
 
                 List<Object> entry = new ArrayList<>();
@@ -75,6 +81,8 @@ public class MainActivity extends AppCompatActivity {
         } catch (Exception e) {
             e.printStackTrace();
         }
+
+        System.out.println(hours.toString());
 
         // create lstm data per node map
         Map<String, Pair<Tensor, Tensor>> lstmDataPerNode = new HashMap<>();
@@ -99,7 +107,7 @@ public class MainActivity extends AppCompatActivity {
 //        }
 
 
-        System.out.println(df.toString());
+//        System.out.println(df.toString());
         // load ptl model
         try {
             mModule = LiteModuleLoader.load(assetFilePath(getApplicationContext(), "ChangesToGraphMobile.ptl"));
@@ -108,23 +116,24 @@ public class MainActivity extends AppCompatActivity {
         }
 
         // run model
-        for (String location : locations) {
-            for (List<Object> d : df) {
-                if (d.get(1).equals(location)) {
-                    System.out.println(d.get(1));
-                    float[] dataSend = {Float.parseFloat((String) d.get(2)), Float.parseFloat((String) d.get(3)), Float.parseFloat((String) d.get(0))}; // speed, angle, time
-                    Tensor dataSendTo = Tensor.fromBlob(dataSend, new long[]{1, 3});
-                    Pair<Tensor, Tensor> lstLSTM = lstmDataPerNode.get(location);
-                    IValue[] inputs = {IValue.from(dataSendTo), IValue.from(lstLSTM.getKey()), IValue.from(lstLSTM.getValue())};
-                    for (IValue input : inputs) {
-                        System.out.println("input: " + input.toTensor());
+        for (Integer hour : hours) {
+            for (String location : locations) {
+                for (List<Object> d : df) {
+                    if (d.get(1).equals(location) && getHour(Integer.parseInt((String) d.get(0))) == hour) {
+                        System.out.println(d.get(1));
+                        float[] dataSend = {Float.parseFloat((String) d.get(2)), Float.parseFloat((String) d.get(3)), Float.parseFloat((String) d.get(0))}; // speed, angle, time
+                        Tensor dataSendTo = Tensor.fromBlob(dataSend, new long[]{1, 3});
+                        Pair<Tensor, Tensor> lstLSTM = lstmDataPerNode.get(location);
+                        IValue[] inputs = {IValue.from(dataSendTo), IValue.from(lstLSTM.getKey()), IValue.from(lstLSTM.getValue())};
+                        for (IValue input : inputs) {
+                            System.out.println("input: " + input.toTensor());
+                        }
+                        IValue outputTensor = mModule.forward(inputs);
+                        System.out.println(location + ": " + Arrays.toString(outputTensor.toTuple()[0].toTensor().getDataAsFloatArray()));
                     }
-                    IValue outputTensor = mModule.forward(inputs);
-                    System.out.println(location + ": " + Arrays.toString(outputTensor.toTuple()[0].toTensor().getDataAsFloatArray()));
                 }
             }
         }
-
 
 //
 //        for (String location : mLocations) {
@@ -170,5 +179,16 @@ public class MainActivity extends AppCompatActivity {
             }
             return file.getAbsolutePath();
         }
+    }
+
+    private static Integer getHour(Integer seconds) {
+        Integer hour = (seconds / 3600 + 9) % 12;
+        if (hour == 0) {
+            hour = 12;
+        }
+        if (hour == 5) {
+            hour = 4;
+        }
+        return hour;
     }
 }
