@@ -6,6 +6,7 @@ import android.util.Log;
 
 import androidx.appcompat.app.AppCompatActivity;
 
+import org.apache.commons.lang3.tuple.Pair;
 import org.pytorch.IValue;
 import org.pytorch.LiteModuleLoader;
 import org.pytorch.Module;
@@ -22,6 +23,16 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
+// read in csv
+import com.opencsv.CSVReader;
+import java.io.IOException;
+import java.io.FileReader;
+
+// lstm data per node
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
 public class MainActivity extends AppCompatActivity {
     private Module mModule;
     private List<String> mLocations = Arrays.asList("A","B","C","D","E","F","G","H","I","L","M","N","O","P");
@@ -31,21 +42,93 @@ public class MainActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
+        // create df and locations list
+        List<List<Object>> df = new ArrayList<>(); // time, pillar, speed, angle
+        List<String> locations = new ArrayList();
+
         try {
-//            mModule = Module.load(assetFilePath(this, "changesToGraph.ptl"));
-            mModule = LiteModuleLoader.load(assetFilePath(getApplicationContext(), "ChangesToGraphMobile.ptl"));
-        } catch (IOException e) {
-            Log.d("errorlocation", "failed to load module");
+            File csvfile = new File(assetFilePath(getApplicationContext(), "short_filtered_21_50.csv"));
+            CSVReader reader = new CSVReader(new FileReader(csvfile.getAbsolutePath()));
+            String[] nextLine;
+            Boolean isHeader = true;
+
+            while ((nextLine = reader.readNext()) != null) {
+                // nextLine[] is an array of values from the line
+//                System.out.println(Arrays.toString(nextLine));
+                if (isHeader) {
+                    isHeader = false;
+                    continue;
+                }
+
+                List<Object> entry = new ArrayList<>();
+                entry.add(nextLine[0]);
+                entry.add(nextLine[1]);
+                entry.add(nextLine[2]);
+                entry.add(nextLine[3]);
+                df.add(entry);
+
+                if (!locations.contains(nextLine[1])) {
+                    locations.add(nextLine[1]);
+                }
+            }
+            System.out.println(locations);
+        } catch (Exception e) {
             e.printStackTrace();
         }
-        if (mModule == null) {
-            Log.d("errorlocation", "module is null");
+
+        // create lstm data per node map
+        Map<String, Pair<Tensor, Tensor>> lstmDataPerNode = new HashMap<>();
+        for (String location : locations) {
+            float[] zerosArray = new float[1280];
+            Arrays.fill(zerosArray, 0f);
+            FloatBuffer zerosBuffer = Tensor.allocateFloatBuffer(zerosArray.length).put(zerosArray);
+            Tensor zerosTensor = Tensor.fromBlob(zerosBuffer, new long[]{10, 128});
+            Pair<Tensor, Tensor> zeroTensorsPair = Pair.of(zerosTensor, zerosTensor);
+            lstmDataPerNode.put(location, zeroTensorsPair);
         }
 
-        for (String location : mLocations) {
-//            mModule.train();
+//        for (Map.Entry<Integer, Pair<Tensor, Tensor>> entry : lstmDataPerNode.entrySet()) {
+//            Integer location = entry.getKey();
+//            Pair<Tensor, Tensor> tensorsPair = entry.getValue();
+//            Tensor tensor1 = tensorsPair.getKey();
+//            Tensor tensor2 = tensorsPair.getValue();
+//
+//            System.out.println("Location: " + location);
+//            System.out.println("Tensor 1: " + tensor1);
+//            System.out.println("Tensor 2: " + Arrays.toString(tensor2.getDataAsFloatArray()));
+//        }
 
-//            float[] inputArray = {2.1440f, 2.0005f, 1.5840f};
+
+        System.out.println(df.toString());
+        // load ptl model
+        try {
+            mModule = LiteModuleLoader.load(assetFilePath(getApplicationContext(), "ChangesToGraphMobile.ptl"));
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+
+        // run model
+        for (String location : locations) {
+            for (List<Object> d : df) {
+                if (d.get(1).equals(location)) {
+                    System.out.println(d.get(1));
+                    float[] dataSend = {Float.parseFloat((String) d.get(2)), Float.parseFloat((String) d.get(3)), Float.parseFloat((String) d.get(0))}; // speed, angle, time
+                    Tensor dataSendTo = Tensor.fromBlob(dataSend, new long[]{1, 3});
+                    Pair<Tensor, Tensor> lstLSTM = lstmDataPerNode.get(location);
+                    IValue[] inputs = {IValue.from(dataSendTo), IValue.from(lstLSTM.getKey()), IValue.from(lstLSTM.getValue())};
+                    for (IValue input : inputs) {
+                        System.out.println("input: " + input.toTensor());
+                    }
+                    IValue outputTensor = mModule.forward(inputs);
+                    System.out.println(location + ": " + Arrays.toString(outputTensor.toTuple()[0].toTensor().getDataAsFloatArray()));
+                }
+            }
+        }
+
+
+//
+//        for (String location : mLocations) {
+//            float[] inputArray = {2.1440f, 2.0005f, 15840f};
 //            FloatBuffer inputBuffer = Tensor.allocateFloatBuffer(inputArray.length).put(inputArray);
 //            Tensor inputTensor = Tensor.fromBlob(inputBuffer, new long[]{1, 3});
 //
@@ -54,52 +137,23 @@ public class MainActivity extends AppCompatActivity {
 //            FloatBuffer zerosBuffer = Tensor.allocateFloatBuffer(zerosArray.length).put(zerosArray);
 //            Tensor zerosTensor = Tensor.fromBlob(zerosBuffer, new long[]{10, 128});
 //
-////            IValue[] inputs = {IValue.from(inputTensor), IValue.from(zerosTensor), IValue.from(zerosTensor)};
-////            Log.d("sampleIn", inputs.toString());
+//            List<Tensor> tuple = new ArrayList<>();
+//            tuple.add(zerosTensor);
+//            tuple.add(zerosTensor);
 //
+//            IValue[] inputs = {IValue.from(inputTensor), IValue.from(zerosTensor), IValue.from(zerosTensor)};
+//            for (IValue input : inputs) {
+//                System.out.println("input: " + input.toTensor());
+//            }
+//            IValue outputTensor = mModule.forward(inputs);
 //
-//            Tensor[] inputs = new Tensor[]{inputTensor, zerosTensor, zerosTensor};
-
-            float[] inputArray = {2.1440f, 2.0005f, 15840f};
-            FloatBuffer inputBuffer = Tensor.allocateFloatBuffer(inputArray.length).put(inputArray);
-            Tensor inputTensor = Tensor.fromBlob(inputBuffer, new long[]{1, 3});
-
-            float[] zerosArray = new float[1280];
-            Arrays.fill(zerosArray, 0f);
-            FloatBuffer zerosBuffer = Tensor.allocateFloatBuffer(zerosArray.length).put(zerosArray);
-            Tensor zerosTensor = Tensor.fromBlob(zerosBuffer, new long[]{10, 128});
-
-//            FloatBuffer fb = Tensor.allocateFloatBuffer(3);
-//            fb.put(inputArray);
-//            fb.put(zerosArray);
-//            fb.put(zerosArray);
-//            IValue iv = IValue.from(fb);
-
-            List<Tensor> tuple = new ArrayList<>();
-            tuple.add(zerosTensor);
-            tuple.add(zerosTensor);
-
-            IValue[] inputs = {IValue.from(inputTensor), IValue.from(zerosTensor), IValue.from(zerosTensor)};
-
-            IValue outputTensor = mModule.forward(inputs);
-
-
-//            float[] outputArray = outputTensor.getDataAsFloatArray();
-            System.out.println(location + ": " + Arrays.toString(outputTensor.toTuple()[0].toTensor().getDataAsFloatArray()));
-
-
-//            Tensor outputTensor = mModule.forward(IValue.listFrom(inputs)).toTensor();
-
-//            float[] outputArray = outputTensor.getDataAsFloatArray();
-//            System.out.println(location + ": " + Arrays.toString(outputArray));
-        }
-
-        System.out.println("Done");
+//            System.out.println(location + ": " + Arrays.toString(outputTensor.toTuple()[0].toTensor().getDataAsFloatArray()));
+//        }
+//
+//        System.out.println("Done");
     }
 
-//    private String assetFilePath(Context context, String assetName) throws IOException {
-//        return context.getFilesDir().getPath() + "/" + assetName;
-//    }
+
     public static String assetFilePath(Context context, String assetName) throws IOException {
         File file = new File(context.getFilesDir(), assetName);
         if (file.exists() && file.length() > 0) {
