@@ -35,7 +35,7 @@ import java.util.Map;
 
 public class MainActivity extends AppCompatActivity {
     private Module mModule;
-    private List<String> mLocations = Arrays.asList("A","B","C","D","E","F","G","H","I","L","M","N","O","P");
+//    private List<String> mLocations = Arrays.asList("A","B","C","D","E","F","G","H","I","L","M","N","O","P");
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -77,12 +77,9 @@ public class MainActivity extends AppCompatActivity {
                     locations.add(nextLine[1]);
                 }
             }
-            System.out.println(locations);
         } catch (Exception e) {
             e.printStackTrace();
         }
-
-        System.out.println(hours.toString());
 
         // create lstm data per node map
         Map<String, Pair<Tensor, Tensor>> lstmDataPerNode = new HashMap<>();
@@ -94,18 +91,6 @@ public class MainActivity extends AppCompatActivity {
             Pair<Tensor, Tensor> zeroTensorsPair = Pair.of(zerosTensor, zerosTensor);
             lstmDataPerNode.put(location, zeroTensorsPair);
         }
-
-//        for (Map.Entry<Integer, Pair<Tensor, Tensor>> entry : lstmDataPerNode.entrySet()) {
-//            Integer location = entry.getKey();
-//            Pair<Tensor, Tensor> tensorsPair = entry.getValue();
-//            Tensor tensor1 = tensorsPair.getKey();
-//            Tensor tensor2 = tensorsPair.getValue();
-//
-//            System.out.println("Location: " + location);
-//            System.out.println("Tensor 1: " + tensor1);
-//            System.out.println("Tensor 2: " + Arrays.toString(tensor2.getDataAsFloatArray()));
-//        }
-
 
 //        System.out.println(df.toString());
         // load ptl model
@@ -121,7 +106,6 @@ public class MainActivity extends AppCompatActivity {
                 List<List<Float>> dataSend = new ArrayList<>(); // list<speed, angle, time>
                 for (List<Object> d : df) {
                     if (d.get(1).equals(location) && getHour(Integer.parseInt((String) d.get(0))) == hour) {
-                        System.out.println("in here");
                         List<Float> dataSendEntry = new ArrayList<>();
                         dataSendEntry.add(Float.parseFloat((String) d.get(2)));
                         dataSendEntry.add(Float.parseFloat((String) d.get(3)));
@@ -142,9 +126,6 @@ public class MainActivity extends AppCompatActivity {
                     data[i][2] = row.get(2);
                 }
 
-                // Create a PyTorch tensor from the data array
-//                Tensor dataSendTo = Tensor.fromBlob(data, new long[]{data.length, 3});
-
                 float[] flatArray = flatten(data);
 
                 // Get the shape of the float array
@@ -153,43 +134,12 @@ public class MainActivity extends AppCompatActivity {
                 // Create a Tensor from the flat array
                 Tensor dataSendTo = Tensor.fromBlob(flatArray, shape);
 
-
-//                Tensor dataSendTo = Tensor.fromBlob(dataSend, new long[]{1, 3});
                 Pair<Tensor, Tensor> lstLSTM = lstmDataPerNode.get(location);
                 IValue[] inputs = {IValue.from(dataSendTo), IValue.from(lstLSTM.getKey()), IValue.from(lstLSTM.getValue())};
-                for (IValue input : inputs) {
-                    System.out.println("input: " + input.toTensor());
-                }
                 IValue outputTensor = mModule.forward(inputs);
                 System.out.println(location + ": " + Arrays.toString(outputTensor.toTuple()[0].toTensor().getDataAsFloatArray()));
             }
         }
-
-//
-//        for (String location : mLocations) {
-//            float[] inputArray = {2.1440f, 2.0005f, 15840f};
-//            FloatBuffer inputBuffer = Tensor.allocateFloatBuffer(inputArray.length).put(inputArray);
-//            Tensor inputTensor = Tensor.fromBlob(inputBuffer, new long[]{1, 3});
-//
-//            float[] zerosArray = new float[1280];
-//            Arrays.fill(zerosArray, 0f);
-//            FloatBuffer zerosBuffer = Tensor.allocateFloatBuffer(zerosArray.length).put(zerosArray);
-//            Tensor zerosTensor = Tensor.fromBlob(zerosBuffer, new long[]{10, 128});
-//
-//            List<Tensor> tuple = new ArrayList<>();
-//            tuple.add(zerosTensor);
-//            tuple.add(zerosTensor);
-//
-//            IValue[] inputs = {IValue.from(inputTensor), IValue.from(zerosTensor), IValue.from(zerosTensor)};
-//            for (IValue input : inputs) {
-//                System.out.println("input: " + input.toTensor());
-//            }
-//            IValue outputTensor = mModule.forward(inputs);
-//
-//            System.out.println(location + ": " + Arrays.toString(outputTensor.toTuple()[0].toTensor().getDataAsFloatArray()));
-//        }
-//
-//        System.out.println("Done");
     }
 
 
@@ -223,13 +173,6 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private static float[] flatten(float[][] data) {
-        for(int i=0; i<data.length; i++){
-            for(int j=0; j<data[i].length; j++){
-                System.out.print(data[i][j] + " ");
-            }
-            System.out.println(); //prints a new line after each row
-        }
-
         int rows = data.length;
         int cols = data[0].length;
         float[] flattenedData = new float[rows * cols];
