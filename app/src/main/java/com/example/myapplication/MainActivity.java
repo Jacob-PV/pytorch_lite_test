@@ -118,20 +118,50 @@ public class MainActivity extends AppCompatActivity {
         // run model
         for (Integer hour : hours) {
             for (String location : locations) {
+                List<List<Float>> dataSend = new ArrayList<>(); // list<speed, angle, time>
                 for (List<Object> d : df) {
                     if (d.get(1).equals(location) && getHour(Integer.parseInt((String) d.get(0))) == hour) {
-                        System.out.println(d.get(1));
-                        float[] dataSend = {Float.parseFloat((String) d.get(2)), Float.parseFloat((String) d.get(3)), Float.parseFloat((String) d.get(0))}; // speed, angle, time
-                        Tensor dataSendTo = Tensor.fromBlob(dataSend, new long[]{1, 3});
-                        Pair<Tensor, Tensor> lstLSTM = lstmDataPerNode.get(location);
-                        IValue[] inputs = {IValue.from(dataSendTo), IValue.from(lstLSTM.getKey()), IValue.from(lstLSTM.getValue())};
-                        for (IValue input : inputs) {
-                            System.out.println("input: " + input.toTensor());
-                        }
-                        IValue outputTensor = mModule.forward(inputs);
-                        System.out.println(location + ": " + Arrays.toString(outputTensor.toTuple()[0].toTensor().getDataAsFloatArray()));
+                        System.out.println("in here");
+                        List<Float> dataSendEntry = new ArrayList<>();
+                        dataSendEntry.add(Float.parseFloat((String) d.get(2)));
+                        dataSendEntry.add(Float.parseFloat((String) d.get(3)));
+                        dataSendEntry.add(Float.parseFloat((String) d.get(0)));
+                        dataSend.add(dataSendEntry);
                     }
                 }
+
+                if (dataSend.size() < 1) {
+                    continue;
+                }
+
+                float[][] data = new float[dataSend.size()][3];
+                for (int i = 0; i < dataSend.size(); i++) {
+                    List<Float> row = dataSend.get(i);
+                    data[i][0] = row.get(0);
+                    data[i][1] = row.get(1);
+                    data[i][2] = row.get(2);
+                }
+
+                // Create a PyTorch tensor from the data array
+//                Tensor dataSendTo = Tensor.fromBlob(data, new long[]{data.length, 3});
+
+                float[] flatArray = flatten(data);
+
+                // Get the shape of the float array
+                long[] shape = new long[] {data.length, data[0].length};
+
+                // Create a Tensor from the flat array
+                Tensor dataSendTo = Tensor.fromBlob(flatArray, shape);
+
+
+//                Tensor dataSendTo = Tensor.fromBlob(dataSend, new long[]{1, 3});
+                Pair<Tensor, Tensor> lstLSTM = lstmDataPerNode.get(location);
+                IValue[] inputs = {IValue.from(dataSendTo), IValue.from(lstLSTM.getKey()), IValue.from(lstLSTM.getValue())};
+                for (IValue input : inputs) {
+                    System.out.println("input: " + input.toTensor());
+                }
+                IValue outputTensor = mModule.forward(inputs);
+                System.out.println(location + ": " + Arrays.toString(outputTensor.toTuple()[0].toTensor().getDataAsFloatArray()));
             }
         }
 
@@ -190,5 +220,25 @@ public class MainActivity extends AppCompatActivity {
             hour = 4;
         }
         return hour;
+    }
+
+    private static float[] flatten(float[][] data) {
+        for(int i=0; i<data.length; i++){
+            for(int j=0; j<data[i].length; j++){
+                System.out.print(data[i][j] + " ");
+            }
+            System.out.println(); //prints a new line after each row
+        }
+
+        int rows = data.length;
+        int cols = data[0].length;
+        float[] flattenedData = new float[rows * cols];
+
+        for (int i = 0; i < rows; i++) {
+            for (int j = 0; j < cols; j++) {
+                flattenedData[i * cols + j] = data[i][j];
+            }
+        }
+        return flattenedData;
     }
 }
