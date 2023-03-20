@@ -35,6 +35,7 @@ import java.util.Map;
 
 public class MainActivity extends AppCompatActivity {
     private Module mModule;
+    private Module gcnModule;
 //    private List<String> mLocations = Arrays.asList("A","B","C","D","E","F","G","H","I","L","M","N","O","P");
 
     @Override
@@ -100,6 +101,8 @@ public class MainActivity extends AppCompatActivity {
             e.printStackTrace();
         }
 
+        float[][] feat_mat_made = new float[locations.size()][256];
+
         // run model
         for (Integer hour : hours) {
             for (String location : locations) {
@@ -137,9 +140,45 @@ public class MainActivity extends AppCompatActivity {
                 Pair<Tensor, Tensor> lstLSTM = lstmDataPerNode.get(location);
                 IValue[] inputs = {IValue.from(dataSendTo), IValue.from(lstLSTM.getKey()), IValue.from(lstLSTM.getValue())};
                 IValue outputTensor = mModule.forward(inputs);
-                System.out.println(location + ": " + Arrays.toString(outputTensor.toTuple()[0].toTensor().getDataAsFloatArray()));
+//                System.out.println(location + ": " + Arrays.toString(outputTensor.toTuple()[0].toTensor().getDataAsFloatArray()));
+
+                // for gcn
+
+                float[] hid = outputTensor.toTuple()[0].toTensor().getDataAsFloatArray();
+                float[] c = outputTensor.toTuple()[1].toTensor().getDataAsFloatArray();
+
+                for (int i = 0; i < 128; i++) {
+                    int index = locations.indexOf(location);
+                    feat_mat_made[index][i] = hid[i];
+                    feat_mat_made[index][i+128] = c[i];
+                }
             }
         }
+
+        for(int i = 0; i < feat_mat_made.length; i++) {
+            for(int j = 0; j < feat_mat_made[0].length; j++) {
+                System.out.print(feat_mat_made[i][j] + ",");
+            }
+            System.out.println();
+        }
+
+          ///////////////
+         // GCN MODEL //
+        ///////////////
+
+//        try {
+//            gcnModule = LiteModuleLoader.load(assetFilePath(getApplicationContext(), "gcnMobileModule.ptl"));
+//        } catch (IOException e) {
+//            e.printStackTrace();
+//        }
+//
+//        aj_norm = torch.rand(x, b)
+//        // create a tensor from the float[][] data
+//        long[] shape = {feat_mat_made.length, feat_mat_made[0].length};
+//        Tensor feat_mat_made_tensor = Tensor.fromBlob(flatten(feat_mat_made), shape);
+//
+//        IValue[] gcnInputs = {IValue.from(feat_mat_made_tensor), IValue.from(adj_norm)};
+//        IValue res = gcnModule.forward(gcnInputs);
     }
 
 
